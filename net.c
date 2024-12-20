@@ -37,45 +37,42 @@ int connect_to_server(const char *hostname, const char *port) {
 
     printf("Trying to connect to %s\n", hostname);
 
-    while (1) {
-        if ((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
-            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-            freeaddrinfo(servinfo);
-            sleep(5);
-            continue; // Try again after a delay
-        }
+    while ((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        sleep(5);
+    }
 
+    while (1) {
         // loop through results and connect to first we can
         for (p = servinfo; p != NULL; p = p->ai_next) {
             if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
-                perror("client: socket");
+                perror("socket creation failed");
                 continue;
             }
 
             if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
                 close(sockfd);
-                perror("client: connect");
+                perror("socket connection failed");
                 continue;
             }
 
-            break; // connected or exhausted options
+            break; // connected
         }
 
         // if not connected, retry
         if (p == NULL) {
-            fprintf(stderr, "client: failed to connect, retrying...\n");
-            freeaddrinfo(servinfo);
+            fprintf(stderr, "retrying...\n\n");
             sleep(5);
-            continue; // Try again
+            continue; // try again
         }
 
         inet_ntop(p->ai_family, get_in_addr((struct sockaddr *) p->ai_addr), s, sizeof s);
-        printf("client: connecting to %s\n", s);
+        printf("connecting to %s\n", s);
 
         freeaddrinfo(servinfo);
 
         // Successfully connected
-        printf("client: connected\n");
+        printf("connected\n");
         return sockfd;
     }
 }
