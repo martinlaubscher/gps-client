@@ -1,0 +1,78 @@
+//
+// Created by martin on 18/12/24.
+//
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+
+#include "net.h"
+
+
+// get sockaddr, IPv4 or IPv6:
+void *get_in_addr(struct sockaddr *sa) {
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in *) sa)->sin_addr);
+    }
+
+    return &(((struct sockaddr_in6 *) sa)->sin6_addr);
+}
+
+int connect_to_server(char *hostname, char *port) {
+    struct addrinfo hints, *servinfo, *p;
+    int rv;
+    int sockfd;
+    char s[INET6_ADDRSTRLEN];
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    printf("Trying to connect to %s\n", hostname);
+
+    while (1) {
+        if ((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
+            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+            sleep(5);
+            continue; // Try again after a delay
+        }
+
+        // loop through results and connect to first we can
+        for (p = servinfo; p != NULL; p = p->ai_next) {
+            if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+                perror("client: socket");
+                continue;
+            }
+
+            if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+                close(sockfd);
+                perror("client: connect");
+                continue;
+            }
+
+            break; // connected
+        }
+
+        if (p == NULL) {
+            fprintf(stderr, "client: failed to connect, retrying...\n");
+            sleep(5);
+            continue; // Try again
+        }
+
+        inet_ntop(p->ai_family, get_in_addr((struct sockaddr *) p->ai_addr), s, sizeof s);
+        printf("client: connecting to %s\n", s);
+
+        freeaddrinfo(servinfo);
+
+        // Successfully connected
+        printf("client: connected\n");
+        return sockfd;
+    }
+}
