@@ -12,8 +12,11 @@
 
 /* "private" function prototypes */
 void discard(Queue *);
+
 bool is_full(Queue *);
+
 bool is_empty(Queue *);
+
 unsigned long size(Queue *);
 /* "private" function prototypes end */
 

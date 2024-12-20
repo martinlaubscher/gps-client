@@ -6,12 +6,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
-#include <netinet/in.h>
-#include <stdbool.h>
 
-#include "constants.h"
 #include "consumer.h"
 #include "net.h"
 #include "producer.h"
@@ -19,7 +15,6 @@
 
 
 int main(int argc, char *argv[]) {
-    char buf[MAX_MSG_SIZE];
 
     if (argc != 3) {
         fprintf(stderr, "usage: client hostname port\n");
