@@ -12,19 +12,17 @@
 #include <unistd.h>
 #include <netinet/in.h>
 
-unsigned long min_len(unsigned long a, unsigned long b) {
-    return (a < b) ? a : b;
-}
+#define min(a,b) (((a) < (b)) ? (a) : (b))
 
 void *consumer_thread(void *arg) {
 
     char recv_buf[MAX_MSG_SIZE];
-    unsigned char send_buf[LEN_PREFIX_SIZE+MAX_MSG_SIZE];
+    char send_buf[LEN_PREFIX_SIZE + MAX_MSG_SIZE];
 
-    ConsumerArgs *consumer_args = (ConsumerArgs *) arg;
+    const ConsumerArgs *consumer_args = (ConsumerArgs *) arg;
     Queue *queue = consumer_args->queue;
-    char *hostname = consumer_args->hostname;
-    char *port = consumer_args->port;
+    const char *hostname = consumer_args->hostname;
+    const char *port = consumer_args->port;
 
     int sockfd = connect_to_server(hostname, port);
 
@@ -42,14 +40,15 @@ void *consumer_thread(void *arg) {
             break;
         }
 
-        u_int32_t msg_len = min_len(strlen(msg), MAX_MSG_SIZE - 1);
-        uint32_t network_msg_len = htonl(msg_len);
+        const u_int32_t msg_len = min(strlen(msg), MAX_MSG_SIZE - 1);
+        const uint32_t network_msg_len = htonl(msg_len);
         size_t total_len = sizeof(network_msg_len) + msg_len;
 
         memcpy(send_buf, &network_msg_len, sizeof(network_msg_len));
         memcpy(send_buf + sizeof(network_msg_len), msg, msg_len);
+        // send_buf[total_len] = '\0';
 
-        if (send(sockfd, send_buf, total_len, MSG_NOSIGNAL) == -1) {
+        if (send_all(sockfd, send_buf, &total_len) == -1) {
             perror("send failed: message\n");
             close(sockfd);
             sockfd = connect_to_server(hostname, port); // try reconnecting on error

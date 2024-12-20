@@ -9,8 +9,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 
-int connect_to_server(char *hostname, char *port);
-// ssize_t send_message(int sockfd, char *msg, uint32_t length);
-// ssize_t receive_message(int sockfd, char *buf, size_t bufsize);
+int connect_to_server(const char *hostname, const char *port);
+int send_all(int sockfd, const char *buf, size_t *len);
 
 #endif //NET_H

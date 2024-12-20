@@ -25,7 +25,7 @@ void *get_in_addr(struct sockaddr *sa) {
     return &(((struct sockaddr_in6 *) sa)->sin6_addr);
 }
 
-int connect_to_server(char *hostname, char *port) {
+int connect_to_server(const char *hostname, const char *port) {
     struct addrinfo hints, *servinfo, *p;
     int rv;
     int sockfd;
@@ -40,6 +40,7 @@ int connect_to_server(char *hostname, char *port) {
     while (1) {
         if ((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
             fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+            freeaddrinfo(servinfo);
             sleep(5);
             continue; // Try again after a delay
         }
@@ -57,11 +58,13 @@ int connect_to_server(char *hostname, char *port) {
                 continue;
             }
 
-            break; // connected
+            break; // connected or exhausted options
         }
 
+        // if not connected, retry
         if (p == NULL) {
             fprintf(stderr, "client: failed to connect, retrying...\n");
+            freeaddrinfo(servinfo);
             sleep(5);
             continue; // Try again
         }
@@ -75,4 +78,22 @@ int connect_to_server(char *hostname, char *port) {
         printf("client: connected\n");
         return sockfd;
     }
+}
+
+int send_all(const int sockfd, const char *buf, size_t *len) {
+    size_t total = 0;
+    size_t bytes_left = *len;
+    int n = -1;
+
+    while (total < *len) {
+        if ((n = send(sockfd, buf + total, bytes_left,  MSG_NOSIGNAL)) == -1) {
+            break;
+        }
+
+        total += n;
+        bytes_left -= n;
+    }
+    *len = total;
+
+    return (n == -1) ? -1 : 0;
 }
