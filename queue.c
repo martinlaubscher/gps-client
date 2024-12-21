@@ -2,12 +2,11 @@
 // Created by martin on 18/12/24.
 //
 
-#include <stdlib.h>
-#include <string.h>
-
 #include "constants.h"
 #include "queue.h"
 
+#include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 
 /* "private" function prototypes */
@@ -18,6 +17,7 @@ bool is_full(Queue *);
 bool is_empty(Queue *);
 
 unsigned long size(Queue *);
+
 /* "private" function prototypes end */
 
 
