@@ -79,13 +79,11 @@ void *producer_thread(void *arg) {
 
         if (num_bytes < 0) {
             printf("Error reading: %s", strerror(errno));
-            // exit(1);
             break;
         }
 
         enqueue(queue, read_buf);
 
-        // printf("Read %i bytes. Received message: %s\n", total_bytes, read_buf);
         sleep(1);
     }
 
