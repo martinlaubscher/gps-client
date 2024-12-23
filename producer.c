@@ -62,12 +62,13 @@ void *producer_thread(void *arg) {
     }
 
     unsigned char msg[] = "AT+CGNSSINFO\r\n";
+    char read_buf[128];
 
     while (1) {
-        char read_buf[128] = {0};
 
         if (write(serial_port, msg, sizeof(msg)) < sizeof(msg)) {
             printf("Error %i from write: %s\n", errno, strerror(errno));
+            continue;
         };
 
         int num_bytes = 0;
@@ -82,9 +83,11 @@ void *producer_thread(void *arg) {
             break;
         }
 
+        read_buf[total_bytes] = '\0';
+
         enqueue(queue, read_buf);
 
-        sleep(1);
+        // sleep(1);
     }
 
     close(serial_port);
