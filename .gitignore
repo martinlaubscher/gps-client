@@ -1,3 +1,4 @@
 /client
 /arm-sdk-buildroot/
 /cmake-build-debug/
+/cmake-build-release/

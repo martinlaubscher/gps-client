@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <termios.h>
+#include <threads.h>
+#include <sys/ioctl.h>
 
 
 void *producer_thread(void *arg) {
@@ -21,13 +23,14 @@ void *producer_thread(void *arg) {
 
     if (serial_port < 0) {
         printf("Error %i from open: %s\n", errno, strerror(errno));
+        return NULL;
     }
 
     struct termios tty;
 
     if (tcgetattr(serial_port, &tty) != 0) {
         printf("Error %i from tcgetattr: %s\n", errno, strerror(errno));
-        exit(1);
+        return NULL;
     }
 
     tty.c_cflag &= ~PARENB;
@@ -48,7 +51,7 @@ void *producer_thread(void *arg) {
     tty.c_oflag &= ~OPOST;
     tty.c_oflag &= ~ONLCR;
 
-    tty.c_cc[VTIME] = 10; // wait for up to 1s (10 deciseconds), returning as soon as any data is received.
+    tty.c_cc[VTIME] = 1; // wait for up to x deciseconds, returning as soon as any data is received.
     tty.c_cc[VMIN] = 0;
 
     cfsetispeed(&tty, B115200);
@@ -66,6 +69,12 @@ void *producer_thread(void *arg) {
 
     while (1) {
 
+        int status;
+        if (ioctl(serial_port, TIOCMGET, &status) < 0) {
+            printf("Serial port check failed: %s\n", strerror(errno));
+            break;
+        }
+
         if (write(serial_port, msg, sizeof(msg)) < sizeof(msg)) {
             printf("Error %i from write: %s\n", errno, strerror(errno));
             continue;
@@ -79,31 +88,43 @@ void *producer_thread(void *arg) {
         };
 
         if (num_bytes < 0) {
-            printf("Error reading: %s", strerror(errno));
+            printf("Error reading: %s\n", strerror(errno));
             break;
         }
 
-        read_buf[total_bytes] = '\0';
+        if (total_bytes == 0) {
+            printf("No data read from serial port.\n");
+            continue;
+        }
 
-        enqueue(queue, read_buf);
+        if (total_bytes < 4) {
+            printf("Not enough data read from serial port. n");
+            continue;
+        }
 
-        // sleep(1);
+        if (strncmp("AT+CGNSSINFO\r\r\n+CGNSSINFO: ", read_buf, 27) != 0) {
+            printf("Wrong prefix: %s\n", read_buf);
+            continue;
+        }
+
+
+        if (strncmp(&read_buf[total_bytes - 4], "OK", 2) != 0) {
+            printf("Wrong suffix: %s\n", read_buf);
+            continue;
+        }
+
+        read_buf[total_bytes - 8] = '\0';
+
+        if (strncmp(",,,,,,,,,,,,,,,", &read_buf[27], 15) == 0) {
+            printf("No GPS data...\n");
+        } else {
+            enqueue(queue, &read_buf[27]);
+        }
+
+        usleep(900000);
     }
 
     close(serial_port);
-
-
-    // for (int i = 100; i > 0; --i) {
-    //     char msg[MAX_MSG_SIZE] = {0};
-    //     sprintf(msg, "+CGNSSINFO: %d,05,02,03,473%d.235748,N,00738.929515,E,161224,144959.0,317.2,0.0,,2.1,1.9,0.8", i, i);
-    //     // printf("message: %s\n", msg);
-    //
-    //     enqueue(queue, msg);
-    //
-    //     const long ms = 100;
-    //     usleep(ms * 1000);
-    //
-    // }
 
     enqueue(queue, "quit");
 

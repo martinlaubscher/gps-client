@@ -15,7 +15,6 @@
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
 void *consumer_thread(void *arg) {
-    // char recv_buf[MAX_MSG_SIZE];
 
     const ConsumerArgs *consumer_args = (ConsumerArgs *) arg;
     Queue *queue = consumer_args->queue;
@@ -55,16 +54,6 @@ void *consumer_thread(void *arg) {
         printf("sent\t\t'%s'\n", msg);
         free(dequeue(queue));
 
-        // long numbytes = recv(sockfd, recv_buf, MAX_MSG_SIZE - 1, MSG_NOSIGNAL);
-        // if (numbytes == -1) {
-        //     perror("recv failed");
-        //     close(sockfd);
-        //     sockfd = connect_to_server(hostname, port); // try reconnecting on error
-        //     continue;
-        // }
-        //
-        // recv_buf[numbytes] = '\0';
-        // printf("received\t'%s'\n\n", recv_buf);
     }
 
     close(sockfd);
