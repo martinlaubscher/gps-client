@@ -14,9 +14,14 @@
 #include <termios.h>
 #include <threads.h>
 #include <sys/ioctl.h>
+#include <gpiod.h>
+#include <signal.h>
 
+#define GREEN_LED_LINE 22
+#define RED_LED_LINE 27
 
 void *producer_thread(void *arg) {
+
     Queue *queue = (Queue *) arg;
 
     int serial_port = open("/dev/ttyUSB2", O_RDWR);
@@ -92,13 +97,8 @@ void *producer_thread(void *arg) {
             break;
         }
 
-        if (total_bytes == 0) {
-            printf("No data read from serial port.\n");
-            continue;
-        }
-
-        if (total_bytes < 4) {
-            printf("Not enough data read from serial port. n");
+        if (total_bytes < 50) {
+            printf("Not enough data read from serial port.\n");
             continue;
         }
 
@@ -113,13 +113,13 @@ void *producer_thread(void *arg) {
             continue;
         }
 
-        read_buf[total_bytes - 8] = '\0';
-
         if (strncmp(",,,,,,,,,,,,,,,", &read_buf[27], 15) == 0) {
             printf("No GPS data...\n");
         } else {
+            read_buf[total_bytes - 8] = '\0';
             enqueue(queue, &read_buf[27]);
         }
+        // enqueue(queue, &read_buf[27]);
 
         usleep(900000);
     }
