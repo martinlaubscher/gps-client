@@ -84,7 +84,7 @@ void *consumer_thread(void *arg) {
         gpiod_line_set_value(red_led_line, 0);
         gpiod_line_set_value(green_led_line, 1);
 
-        printf("sent\t\t'%s'\n", msg);
+        printf("sent: '%s'\n", msg);
         free(dequeue(queue));
 
     }
