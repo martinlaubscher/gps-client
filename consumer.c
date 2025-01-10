@@ -11,10 +11,39 @@
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <gpiod.h>
+#include <signal.h>
 
+#define GREEN_LED_LINE 22
+#define RED_LED_LINE 27
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
 void *consumer_thread(void *arg) {
+
+    // open gpio chip
+    struct gpiod_chip *chip = gpiod_chip_open("/dev/gpiochip0");
+    if (!chip) {
+        perror("gpiochip_open");
+        return NULL;
+    }
+
+    // get gpio line
+    struct gpiod_line *green_led_line = gpiod_chip_get_line(chip, GREEN_LED_LINE);
+    // reserve single gpio line
+    if (gpiod_line_request_output(green_led_line, "green_led", 0) < 0) {
+        perror("gpiod_line_request_output");
+        gpiod_chip_close(chip);
+        return NULL;
+    }
+
+    // get gpio line
+    struct gpiod_line *red_led_line = gpiod_chip_get_line(chip, RED_LED_LINE);
+    // reserve single gpio line
+    if (gpiod_line_request_output(red_led_line, "red_led", 1) < 0) {
+        perror("gpiod_line_request_output");
+        gpiod_chip_close(chip);
+        return NULL;
+    }
 
     const ConsumerArgs *consumer_args = (ConsumerArgs *) arg;
     Queue *queue = consumer_args->queue;
@@ -45,16 +74,27 @@ void *consumer_thread(void *arg) {
         memcpy(send_buf + sizeof(network_msg_len), msg, msg_len);
 
         if (send_all(sockfd, send_buf, &total_len) == -1) {
+            gpiod_line_set_value(green_led_line, 0);
+            gpiod_line_set_value(red_led_line, 1);
             perror("send failed: message\n");
             close(sockfd);
             sockfd = connect_to_server(hostname, port); // try reconnecting on error
             continue;
         }
+        gpiod_line_set_value(red_led_line, 0);
+        gpiod_line_set_value(green_led_line, 1);
 
         printf("sent\t\t'%s'\n", msg);
         free(dequeue(queue));
 
     }
+
+    gpiod_line_set_value(green_led_line, 0);
+    gpiod_line_set_value(red_led_line, 0);
+
+    gpiod_line_release(green_led_line);
+    gpiod_line_release(red_led_line);
+    gpiod_chip_close(chip);
 
     close(sockfd);
     return NULL;
