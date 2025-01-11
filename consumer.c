@@ -12,56 +12,29 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <gpiod.h>
-#include <signal.h>
 
-#define GREEN_LED_LINE 22
-#define RED_LED_LINE 27
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
+
+
 void *consumer_thread(void *arg) {
-
-    // open gpio chip
-    struct gpiod_chip *chip = gpiod_chip_open("/dev/gpiochip0");
-    if (!chip) {
-        perror("gpiochip_open");
-        return NULL;
-    }
-
-    // get gpio line
-    struct gpiod_line *green_led_line = gpiod_chip_get_line(chip, GREEN_LED_LINE);
-    // reserve single gpio line
-    if (gpiod_line_request_output(green_led_line, "green_led", 0) < 0) {
-        perror("gpiod_line_request_output");
-        gpiod_chip_close(chip);
-        return NULL;
-    }
-
-    // get gpio line
-    struct gpiod_line *red_led_line = gpiod_chip_get_line(chip, RED_LED_LINE);
-    // reserve single gpio line
-    if (gpiod_line_request_output(red_led_line, "red_led", 1) < 0) {
-        perror("gpiod_line_request_output");
-        gpiod_chip_close(chip);
-        return NULL;
-    }
 
     const ConsumerArgs *consumer_args = (ConsumerArgs *) arg;
     Queue *queue = consumer_args->queue;
     const char *hostname = consumer_args->hostname;
     const char *port = consumer_args->port;
+    struct gpiod_line *red_led_line = consumer_args->red_led_line;
+    struct gpiod_line *green_led_line = consumer_args->green_led_line;
+    volatile int *alive = consumer_args->alive;
 
-    int sockfd = connect_to_server(hostname, port);
+    int sockfd = connect_to_server(hostname, port, alive);
 
     printf("sockfd: %d\n", sockfd);
 
-    if (sockfd == -1) {
-        perror("Failed to connect to server");
-        return NULL;
-    }
-
-    while (1) {
-        char *msg = peek_queue(queue);
-        if (strcmp(msg, "quit") == 0) {
+    while (*alive) {
+        // char *msg = peek_queue(queue, alive);
+        char *msg;
+        if ((msg = peek_queue(queue, alive)) == NULL) {
             break;
         }
 
@@ -78,24 +51,18 @@ void *consumer_thread(void *arg) {
             gpiod_line_set_value(red_led_line, 1);
             perror("send failed: message\n");
             close(sockfd);
-            sockfd = connect_to_server(hostname, port); // try reconnecting on error
+            sockfd = connect_to_server(hostname, port, alive); // try reconnecting on error
             continue;
         }
-        gpiod_line_set_value(red_led_line, 0);
-        gpiod_line_set_value(green_led_line, 1);
 
+        gpiod_line_set_value(green_led_line, 1);
+        gpiod_line_set_value(red_led_line, 0);
         printf("sent: '%s'\n", msg);
         free(dequeue(queue));
 
     }
 
-    gpiod_line_set_value(green_led_line, 0);
-    gpiod_line_set_value(red_led_line, 0);
-
-    gpiod_line_release(green_led_line);
-    gpiod_line_release(red_led_line);
-    gpiod_chip_close(chip);
-
     close(sockfd);
-    return NULL;
+    printf("Consumer thread exiting.\n");
+    pthread_exit(NULL);
 }

@@ -25,7 +25,7 @@ void *get_in_addr(struct sockaddr *sa) {
     return &(((struct sockaddr_in6 *) sa)->sin6_addr);
 }
 
-int connect_to_server(const char *hostname, const char *port) {
+int connect_to_server(const char *hostname, const char *port, volatile int *alive) {
     struct addrinfo hints, *servinfo, *p;
     int rv;
     int sockfd;
@@ -42,7 +42,7 @@ int connect_to_server(const char *hostname, const char *port) {
         sleep(5);
     }
 
-    while (1) {
+    while (*alive) {
         // loop through results and connect to first we can
         for (p = servinfo; p != NULL; p = p->ai_next) {
             if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
@@ -75,6 +75,7 @@ int connect_to_server(const char *hostname, const char *port) {
         printf("connected\n");
         return sockfd;
     }
+    return -1;
 }
 
 int send_all(const int sockfd, const char *buf, size_t *len) {

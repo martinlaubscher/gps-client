@@ -10,22 +10,23 @@
 
 #include "constants.h"
 
-struct Node {
+
+typedef struct Node {
     char msg[MAX_MSG_SIZE];
     struct Node *next;
-} typedef Node;
+} Node;
 
-struct {
+typedef struct Queue {
     Node *head;
     Node *tail;
     unsigned long size;
     pthread_mutex_t lock;
     pthread_cond_t cond;
-} typedef Queue;
+} Queue;
 
 void enqueue(Queue *queue, char *msg);
 Node *dequeue(Queue *queue);
-char *peek_queue(Queue *queue);
+char *peek_queue(Queue *queue, volatile int *alive);
 Queue *init_queue(void);
 void free_queue(Queue *queue);
 

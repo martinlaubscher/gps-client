@@ -61,10 +61,15 @@ Node *dequeue(Queue *queue) {
 }
 
 
-char *peek_queue(Queue *queue) {
+char *peek_queue(Queue *queue, volatile int *alive) {
     pthread_mutex_lock(&queue->lock);
-    while (queue->head == NULL) {
+    while (queue->head == NULL && *alive) {
         pthread_cond_wait(&queue->cond, &queue->lock);
+    }
+
+    if (!(*alive)) {
+        pthread_mutex_unlock(&queue->lock);
+        return NULL;
     }
 
     char *head_msg = queue->head->msg;

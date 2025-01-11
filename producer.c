@@ -17,17 +17,22 @@
 #include <gpiod.h>
 #include <signal.h>
 
-#define GREEN_LED_LINE 22
-#define RED_LED_LINE 27
+#define SLEEP_US 900000
+
+void set_leds(const GpsLedLines *gps_led_lines, int red, int yellow, int green);
 
 void *producer_thread(void *arg) {
 
-    Queue *queue = (Queue *) arg;
+    const ProducerArgs *producer_args = (ProducerArgs *) arg;
+    Queue *queue = producer_args->queue;
+    GpsLedLines *gps_led_lines = producer_args->gps_led_lines;
+    volatile int *alive = producer_args->alive;
 
     int serial_port = open("/dev/ttyUSB2", O_RDWR);
 
     if (serial_port < 0) {
         printf("Error %i from open: %s\n", errno, strerror(errno));
+        set_leds(gps_led_lines, 1, 0, 0);
         return NULL;
     }
 
@@ -35,6 +40,7 @@ void *producer_thread(void *arg) {
 
     if (tcgetattr(serial_port, &tty) != 0) {
         printf("Error %i from tcgetattr: %s\n", errno, strerror(errno));
+        set_leds(gps_led_lines, 1, 0, 0);
         return NULL;
     }
 
@@ -66,22 +72,27 @@ void *producer_thread(void *arg) {
 
     if (tcsetattr(serial_port, TCSANOW, &tty) != 0) {
         printf("Error %i from tcsetattr: %s\n", errno, strerror(errno));
+        set_leds(gps_led_lines, 1, 0, 0);
         exit(1);
     }
 
     unsigned char msg[] = "AT+CGNSSINFO\r\n";
     char read_buf[128];
 
-    while (1) {
+    while (*alive) {
 
         int status;
         if (ioctl(serial_port, TIOCMGET, &status) < 0) {
             printf("Serial port check failed: %s\n", strerror(errno));
-            break;
+            set_leds(gps_led_lines, 1, 0, 0);
+            sleep(1);
+            continue;
         }
 
-        if (write(serial_port, msg, sizeof(msg)) < sizeof(msg)) {
+        if (write(serial_port, msg, sizeof(msg)) < (ssize_t) sizeof(msg)) {
             printf("Error %i from write: %s\n", errno, strerror(errno));
+            set_leds(gps_led_lines, 1, 0, 0);
+            sleep(1);
             continue;
         };
 
@@ -94,39 +105,55 @@ void *producer_thread(void *arg) {
 
         if (num_bytes < 0) {
             printf("Error reading: %s\n", strerror(errno));
-            break;
+            set_leds(gps_led_lines, 1, 0, 0);
+            usleep(SLEEP_US);
+            continue;
         }
 
         if (total_bytes < 50) {
             printf("Not enough data read from serial port.\n");
+            set_leds(gps_led_lines, 1, 0, 0);
+            usleep(SLEEP_US);
             continue;
         }
 
         if (strncmp("AT+CGNSSINFO\r\r\n+CGNSSINFO: ", read_buf, 27) != 0) {
             printf("Wrong prefix: %s\n", read_buf);
+            set_leds(gps_led_lines, 1, 0, 0);
             continue;
         }
 
 
         if (strncmp(&read_buf[total_bytes - 4], "OK", 2) != 0) {
             printf("Wrong suffix: %s\n", read_buf);
+            set_leds(gps_led_lines, 1, 0, 0);
             continue;
         }
 
         if (strncmp(",,,,,,,,,,,,,,,", &read_buf[27], 15) == 0) {
             printf("No GPS data...\n");
+            set_leds(gps_led_lines, 0, 1, 0);
         } else {
             read_buf[total_bytes - 8] = '\0';
             enqueue(queue, &read_buf[27]);
+            set_leds(gps_led_lines, 0, 0, 1);
         }
         // enqueue(queue, &read_buf[27]);
 
-        usleep(900000);
+        usleep(SLEEP_US);
     }
 
     close(serial_port);
 
-    enqueue(queue, "quit");
+    pthread_cond_signal(&queue->cond);
 
-    return NULL;
+    printf("Producer thread exiting.\n");
+
+    pthread_exit(NULL);
+}
+
+void set_leds(const GpsLedLines *gps_led_lines, int red, int yellow, int green) {
+    gpiod_line_set_value(gps_led_lines->red, red);
+    gpiod_line_set_value(gps_led_lines->yellow, yellow);
+    gpiod_line_set_value(gps_led_lines->green, green);
 }

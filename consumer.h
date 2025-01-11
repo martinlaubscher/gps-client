@@ -9,10 +9,13 @@
 
 void *consumer_thread(void *arg);
 
-struct {
+typedef struct ConsumerArgs {
     Queue *queue;
     char *hostname;
     char *port;
-} typedef ConsumerArgs;
+    struct gpiod_line *green_led_line;
+    struct gpiod_line *red_led_line;
+    volatile int *alive;
+} ConsumerArgs;
 
 #endif //CONSUMER_H

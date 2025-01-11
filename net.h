@@ -9,7 +9,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 
-int connect_to_server(const char *hostname, const char *port);
+int connect_to_server(const char *hostname, const char *port, volatile int *alive);
 int send_all(int sockfd, const char *buf, size_t *len);
 
 #endif //NET_H
