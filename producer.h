@@ -9,15 +9,9 @@
 
 void *producer_thread(void *arg);
 
-typedef struct GpsLedLines {
-    struct gpiod_line *red;
-    struct gpiod_line *yellow;
-    struct gpiod_line *green;
-} GpsLedLines;
-
 typedef struct ProducerArgs {
     Queue *queue;
-    GpsLedLines *gps_led_lines;
+    struct gpiod_line_request *led_request;
     volatile int *alive;
 } ProducerArgs;
 

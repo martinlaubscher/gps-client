@@ -2,6 +2,7 @@
 ** client.c -- a stream socket client demo
 */
 
+#include <errno.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -9,6 +10,7 @@
 #include <unistd.h>
 #include <gpiod.h>
 #include <signal.h>
+#include <string.h>
 
 #include "consumer.h"
 #include "net.h"
@@ -22,15 +24,61 @@
 #define GPS_YELLOW_LINE 24
 #define GPS_GREEN_LINE 25
 
+#define NUM_GPS_LEDS 3
+#define NUM_CONSUMER_LEDS 2
+
+
 static volatile int alive = 1;
 
-void sigHandler(int)
-{
+void sigHandler(int) {
     alive = 0;
 }
 
-int main(int argc, char *argv[]) {
+static struct gpiod_line_request *
+request_lines(struct gpiod_chip *chip, const unsigned int *offsets, unsigned int num_lines, const char *consumer,
+              enum gpiod_line_direction direction, enum gpiod_line_bias bias) {
+    struct gpiod_request_config *rconfig = NULL;
+    struct gpiod_line_request *request = NULL;
+    struct gpiod_line_settings *settings;
+    struct gpiod_line_config *lconfig;
 
+    settings = gpiod_line_settings_new();
+    if (!settings)
+        return NULL;
+
+    gpiod_line_settings_set_direction(settings, direction);
+    gpiod_line_settings_set_bias(settings, bias);
+
+    lconfig = gpiod_line_config_new();
+    if (!lconfig)
+        goto free_settings;
+
+    if (gpiod_line_config_add_line_settings(lconfig, offsets, num_lines, settings) == -1) {
+        goto free_settings;
+    }
+
+
+    if (consumer) {
+        rconfig = gpiod_request_config_new();
+        if (!rconfig)
+            goto free_line_config;
+
+        gpiod_request_config_set_consumer(rconfig, consumer);
+    }
+
+    request = gpiod_chip_request_lines(chip, rconfig, lconfig);
+    gpiod_request_config_free(rconfig);
+
+free_line_config:
+    gpiod_line_config_free(lconfig);
+
+free_settings:
+    gpiod_line_settings_free(settings);
+
+    return request;
+}
+
+int main(int argc, char *argv[]) {
     signal(SIGINT, sigHandler);
     signal(SIGTERM, sigHandler);
 
@@ -43,52 +91,23 @@ int main(int argc, char *argv[]) {
     struct gpiod_chip *chip = gpiod_chip_open("/dev/gpiochip0");
     if (!chip) {
         perror("gpiochip_open");
-        return 1;
+        return EXIT_FAILURE;;
     }
 
-    // get gpio line
-    struct gpiod_line *green_led_line = gpiod_chip_get_line(chip, GREEN_LED_LINE);
-    // reserve single gpio line
-    if (gpiod_line_request_output(green_led_line, "green_led", 0) < 0) {
-        perror("gpiod_line_request_output");
-        gpiod_chip_close(chip);
-        return 1;
-    }
+    static const unsigned int gps_led_offsets[NUM_GPS_LEDS] = {GPS_GREEN_LINE, GPS_YELLOW_LINE, GPS_RED_LINE};
+    static const unsigned int consumer_led_offsets[NUM_CONSUMER_LEDS] = {GREEN_LED_LINE, RED_LED_LINE};
 
-    // get gpio line
-    struct gpiod_line *red_led_line = gpiod_chip_get_line(chip, RED_LED_LINE);
-    // reserve single gpio line
-    if (gpiod_line_request_output(red_led_line, "red_led", 1) < 0) {
-        perror("gpiod_line_request_output");
-        gpiod_chip_close(chip);
-        return 1;
-    }
 
-    // get gpio line
-    struct gpiod_line *gps_red_line = gpiod_chip_get_line(chip, GPS_RED_LINE);
-    // reserve single gpio line
-    if (gpiod_line_request_output(gps_red_line, "gps_red_led", 0) < 0) {
-        perror("gpiod_line_request_output");
-        gpiod_chip_close(chip);
-        return 1;
-    }
+    struct gpiod_line_request *gps_led_request = request_lines(chip, gps_led_offsets,NUM_GPS_LEDS, "gps_led",
+                                                               GPIOD_LINE_DIRECTION_OUTPUT, GPIOD_LINE_BIAS_AS_IS);
+    struct gpiod_line_request *consumer_led_request = request_lines(chip, consumer_led_offsets, NUM_CONSUMER_LEDS,
+                                                                    "consumer_led",
+                                                                    GPIOD_LINE_DIRECTION_OUTPUT, GPIOD_LINE_BIAS_AS_IS);
+    gpiod_chip_close(chip);
 
-    // get gpio line
-    struct gpiod_line *gps_yellow_line = gpiod_chip_get_line(chip, GPS_YELLOW_LINE);
-    // reserve single gpio line
-    if (gpiod_line_request_output(gps_yellow_line, "gps_yellow_led", 0) < 0) {
-        perror("gpiod_line_request_output");
-        gpiod_chip_close(chip);
-        return 1;
-    }
-
-    // get gpio line
-    struct gpiod_line *gps_green_line = gpiod_chip_get_line(chip, GPS_GREEN_LINE);
-    // reserve single gpio line
-    if (gpiod_line_request_output(gps_green_line, "gps_green_led", 0) < 0) {
-        perror("gpiod_line_request_output");
-        gpiod_chip_close(chip);
-        return 1;
+    if (!gps_led_request || !consumer_led_request) {
+        fprintf(stderr, "failed to request line: %s\n", strerror(errno));
+        return EXIT_FAILURE;
     }
 
     Queue *queue = init_queue();
@@ -97,18 +116,12 @@ int main(int argc, char *argv[]) {
     consumer_args.hostname = argv[1];
     consumer_args.port = argv[2];
     consumer_args.queue = queue;
-    consumer_args.green_led_line = green_led_line;
-    consumer_args.red_led_line = red_led_line;
+    consumer_args.led_request = consumer_led_request;
     consumer_args.alive = &alive;
-
-    GpsLedLines gps_led_lines;
-    gps_led_lines.green = gps_green_line;
-    gps_led_lines.yellow = gps_yellow_line;
-    gps_led_lines.red = gps_red_line;
 
     ProducerArgs producer_args;
     producer_args.queue = queue;
-    producer_args.gps_led_lines = &gps_led_lines;
+    producer_args.led_request = gps_led_request;
     producer_args.alive = &alive;
 
     pthread_t prod_tid, cons_tid;
@@ -126,21 +139,9 @@ int main(int argc, char *argv[]) {
     free_queue(queue);
     queue = NULL;
 
-    // turn off LEDs
-    gpiod_line_set_value(green_led_line, 0);
-    gpiod_line_set_value(red_led_line, 0);
-    gpiod_line_set_value(gps_red_line, 0);
-    gpiod_line_set_value(gps_yellow_line, 0);
-    gpiod_line_set_value(gps_green_line, 0);
-
     // release gpio lines
-    gpiod_line_release(green_led_line);
-    gpiod_line_release(red_led_line);
-    gpiod_line_release(gps_red_line);
-    gpiod_line_release(gps_yellow_line);
-    gpiod_line_release(gps_green_line);
-
-    gpiod_chip_close(chip);
+    gpiod_line_request_release(gps_led_request);
+    gpiod_line_request_release(consumer_led_request);
 
     return 0;
 }

@@ -13,8 +13,7 @@ typedef struct ConsumerArgs {
     Queue *queue;
     char *hostname;
     char *port;
-    struct gpiod_line *green_led_line;
-    struct gpiod_line *red_led_line;
+    struct gpiod_line_request *led_request;
     volatile int *alive;
 } ConsumerArgs;
 

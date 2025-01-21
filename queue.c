@@ -24,7 +24,7 @@ unsigned long size(Queue *);
 void enqueue(Queue *queue, char *msg) {
     Node *newNode = malloc(sizeof(Node));
     memset(newNode, 0, sizeof(Node));
-    strncpy(newNode->msg, msg, MAX_MSG_SIZE);
+    strncpy(newNode->msg, msg, MAX_MSG_SIZE-1);
     newNode->next = NULL;
 
     pthread_mutex_lock(&queue->lock);
