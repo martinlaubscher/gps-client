@@ -179,7 +179,7 @@ void *producer_thread(void *arg) {
         }
 
         if (strncmp(",,,,,,,,,,,,,,,", &read_buf[27], 15) == 0) {
-            printf("No GPS data...\n");
+            // printf("No GPS data...\n");
             gpiod_line_request_set_values(led_request, gps_leds_yellow);
         } else {
             read_buf[total_bytes - 8] = '\0';

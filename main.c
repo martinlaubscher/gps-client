@@ -17,12 +17,12 @@
 #include "producer.h"
 #include "queue.h"
 
-#define GREEN_LED_LINE 22
-#define RED_LED_LINE 27
+#define RED_LED_LINE 14
+#define GREEN_LED_LINE 15
 
-#define GPS_RED_LINE 23
-#define GPS_YELLOW_LINE 24
-#define GPS_GREEN_LINE 25
+#define GPS_RED_LINE 17
+#define GPS_YELLOW_LINE 27
+#define GPS_GREEN_LINE 22
 
 #define NUM_GPS_LEDS 3
 #define NUM_CONSUMER_LEDS 2

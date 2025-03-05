@@ -75,7 +75,7 @@ void *consumer_thread(void *arg) {
         }
 
         gpiod_line_request_set_values(led_request, consumer_leds_green);
-        printf("sent: '%s'\n", msg);
+        // printf("sent: '%s'\n", msg);
         free(dequeue(queue));
     }
 
