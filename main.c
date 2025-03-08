@@ -17,8 +17,8 @@
 #include "producer.h"
 #include "queue.h"
 
-#define RED_LED_LINE 14
-#define GREEN_LED_LINE 15
+#define RED_LED_LINE 15
+#define GREEN_LED_LINE 18
 
 #define GPS_RED_LINE 17
 #define GPS_YELLOW_LINE 27

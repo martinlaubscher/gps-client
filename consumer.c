@@ -11,7 +11,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <gpiod.h>
+#include <time.h>
+#include <systemd/sd-journal.h>
 
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
@@ -47,9 +50,14 @@ void *consumer_thread(void *arg) {
 
     int sockfd = connect_to_server(hostname, port, alive);
 
+    int tcp_timeout = 400; // milliseconds
+    if (setsockopt(sockfd, IPPROTO_TCP, TCP_USER_TIMEOUT, &tcp_timeout, sizeof(tcp_timeout)) < 0) {
+        sd_journal_print(LOG_ERR, "failed to set TCP_USER_TIMEOUT");
+    }
+
     gpiod_line_request_set_values(led_request, consumer_leds_on);
 
-    printf("sockfd: %d\n", sockfd);
+    sd_journal_print(LOG_INFO, "sockfd: %d", sockfd);
 
     while (*alive) {
         // char *msg = peek_queue(queue, alive);
@@ -66,11 +74,18 @@ void *consumer_thread(void *arg) {
         memcpy(send_buf, &network_msg_len, sizeof(network_msg_len));
         memcpy(send_buf + sizeof(network_msg_len), msg, msg_len);
 
+        // sd_journal_print(LOG_INFO, "sending message: %s", msg);
+
         if (send_all(sockfd, send_buf, &total_len) == -1) {
-            gpiod_line_request_set_values(led_request, consumer_leds_red);
-            perror("send failed: message\n");
+            sd_journal_print(LOG_ERR, "send failed: %s", msg);
+            if (gpiod_line_request_set_values(led_request, consumer_leds_red) == -1) {
+                sd_journal_print(LOG_ERR, "could not set LED red");
+            };
             close(sockfd);
-            sockfd = connect_to_server(hostname, port, alive); // try reconnecting on error
+            if (*alive) {
+                sd_journal_print(LOG_ERR, "alive and about to reconnect");
+                sockfd = connect_to_server(hostname, port, alive); // try reconnecting on error
+            }
             continue;
         }
 
@@ -78,9 +93,8 @@ void *consumer_thread(void *arg) {
         // printf("sent: '%s'\n", msg);
         free(dequeue(queue));
     }
-
     gpiod_line_request_set_values(led_request, consumer_leds_off);
     close(sockfd);
-    printf("Consumer thread exiting.\n");
+    sd_journal_print(LOG_INFO, "Consumer thread exiting.");
     pthread_exit(NULL);
 }

@@ -12,9 +12,9 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-
+#include <time.h>
 #include "net.h"
-
+#include <systemd/sd-journal.h>
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa) {
@@ -35,10 +35,10 @@ int connect_to_server(const char *hostname, const char *port, volatile int *aliv
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    printf("Trying to connect to %s\n", hostname);
+    sd_journal_print(LOG_INFO, "connecting to %s", hostname);
 
-    while ((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+    while (*alive && (rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
+        sd_journal_print(LOG_ERR, "getaddrinfo: %s", gai_strerror(rv));
         sleep(5);
     }
 
@@ -46,13 +46,13 @@ int connect_to_server(const char *hostname, const char *port, volatile int *aliv
         // loop through results and connect to first we can
         for (p = servinfo; p != NULL; p = p->ai_next) {
             if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
-                perror("socket creation failed");
+                sd_journal_print(LOG_ERR, "socket creation failed");
                 continue;
             }
 
             if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
                 close(sockfd);
-                perror("socket connection failed");
+                sd_journal_print(LOG_ERR, "socket connection failed");
                 continue;
             }
 
@@ -61,30 +61,30 @@ int connect_to_server(const char *hostname, const char *port, volatile int *aliv
 
         // if not connected, retry
         if (p == NULL) {
-            fprintf(stderr, "retrying...\n\n");
+            sd_journal_print(LOG_INFO, "retrying...");
             sleep(5);
             continue; // try again
         }
 
         inet_ntop(p->ai_family, get_in_addr((struct sockaddr *) p->ai_addr), s, sizeof s);
-        printf("connecting to %s\n", s);
 
         freeaddrinfo(servinfo);
 
         // Successfully connected
-        printf("connected\n");
+        sd_journal_print(LOG_INFO, "connected to %s", s);
         return sockfd;
     }
     return -1;
 }
 
 int send_all(const int sockfd, const char *buf, size_t *len) {
+    // sd_journal_print(LOG_INFO, "sending %u bytes to server", *len);
     size_t total = 0;
     size_t bytes_left = *len;
     int n = -1;
 
     while (total < *len) {
-        if ((n = send(sockfd, buf + total, bytes_left,  MSG_NOSIGNAL)) == -1) {
+        if ((n = send(sockfd, buf + total, bytes_left, MSG_NOSIGNAL)) == -1) {
             break;
         }
 
@@ -92,6 +92,9 @@ int send_all(const int sockfd, const char *buf, size_t *len) {
         bytes_left -= n;
     }
     *len = total;
+
+    // sd_journal_print(LOG_INFO, "sent %u bytes to server", total);
+    // sd_journal_print(LOG_INFO, "returning %d", n == -1);
 
     return (n == -1) ? -1 : 0;
 }
